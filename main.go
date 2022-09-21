@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-//take message break into small pieces - threads cannot simulate re-ordering/message drops.
+//TODO Try to simulate windowsize and dropping data / reordering.
 
 type header struct {
 	syn        bool
