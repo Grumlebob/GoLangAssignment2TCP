@@ -34,7 +34,7 @@ func main() {
 	//Create client
 	client := clientSimulation{
 		header:         &head,
-		bytes:          1000,
+		bytes:          500,
 		channelRecieve: make(chan header, 1),
 		channelSend:    make(chan header, 1),
 	}
@@ -46,7 +46,7 @@ func main() {
 		channelSend:    make(chan header, 1),
 	}
 
-	//Go routine for client and server unsure if & before channels.
+	//Go routine for client and server
 	go clientRoutine(&client, server.channelRecieve)
 	go serverRoutine(&server, client.channelRecieve)
 
@@ -55,14 +55,13 @@ func main() {
 }
 
 func clientRoutine(client *clientSimulation, serverChannel chan header) {
-	//Setup client first time
 	client.header.syn = true
 	client.header.seq = 0
 	//First handshake. Syn flag on, and we chose to start seq at 0
 	fmt.Println("Client sent first handshake, syn: ", client.header.syn, " and seq:", client.header.seq)
 	serverChannel <- *client.header
 	//Simulate we want to send X bytes (move to param)
-	client.bytes = 100000
+	client.bytes = 500
 	client.header.windowSize = 1000
 	//Third handshake, and now connection is established and data can be sent.
 	thirdHandshake := <-client.channelRecieve
@@ -70,13 +69,18 @@ func clientRoutine(client *clientSimulation, serverChannel chan header) {
 	fmt.Println("Client is now sending data of total length:", client.bytes)
 	client.header.seq = thirdHandshake.ack
 	serverChannel <- *client.header
-	time.Sleep(time.Second * 1000)
+	time.Sleep(time.Second * 3)
 	for {
 		select {
 		case msg := <-client.channelRecieve:
 			//Rediger her vores header inden vi sender til serveren.
 			client.header.seq = msg.ack
 			fmt.Println("Client fik besked fra server. med ACK: ", msg.ack)
+			if msg.ack == client.bytes {
+				//Close vores connection.
+				fmt.Println("Client fik besked fra server at vi er færdige med at sende data.")
+				break
+			}
 			serverChannel <- *client.header
 		default:
 			continue
@@ -85,18 +89,15 @@ func clientRoutine(client *clientSimulation, serverChannel chan header) {
 }
 
 func serverRoutine(server *serverSimulation, clientChannel chan header) {
-	//Setup server first time
 	//Wait until host wants to establish connection
 	firstHandshake := <-server.channelRecieve //First handshake from client.
-	server.header.syn = true
+	server.header.syn = firstHandshake.syn
 	server.header.ack = firstHandshake.seq + 1
-	//Second handshake from server
 	fmt.Println("Server sent second handshake, syn:", server.header.syn, " and ack:", server.header.ack)
 	clientChannel <- *server.header
 	for {
 		select {
 		case msg := <-server.channelRecieve:
-			//Rediger header her inden den sendes? Lav det om til at det er enkelt header!
 			server.expectedSeq = server.header.ack
 			server.header.ack = msg.seq + 1
 			fmt.Println("Server fik besked fra client. Med SEQ:", msg.seq, "and expected:", server.expectedSeq)
